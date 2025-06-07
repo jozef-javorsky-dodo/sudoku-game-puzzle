@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sudoku - The Definitive Puzzle Game</title>
+    <meta
+      name="description"
+      content="The definitive Sudoku puzzle game, meticulously crafted for thinkers, artists, and puzzle lovers. Built with Vue.js for an elegant, performant, and accessible experience."
+    />
+    <meta name="author" content="https://github.com/jozef-javorsky-dodo" />
+    <link
+      rel="icon"
+      href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAEnQAABJ0Ad5mH3gAAABNSURBVDhPnYxBCgAwCMN89969BwxRChapzNBDAqJtOPdgYzqwEJ3F2gvKNGzMFfRDpwML0VmsvaBMw8ZcQT90OrAQncXaC8o0bMxPzB5Uhc3hFV6GqgAAAABJRU5ErkJggg=="
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#f8fafc"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0f172a"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3.4.27/dist/vue.global.prod.js"></script>
+    <style>
+      :root {
+        --cell-size: clamp(32px, 10vw, 56px);
+        --radius: 0.5rem;
+        --border-width-thin: 1px;
+        --border-width-thick: 2px;
+        --transition-duration: 0.15s;
+      }
+      html {
+        scroll-behavior: smooth;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      [v-cloak] {
+        display: none;
+      }
+      .grid-container {
+        display: grid;
+        grid-template-columns: repeat(9, 1fr);
+        width: calc(var(--cell-size) * 9 + var(--border-width-thick) * 2);
+        height: calc(var(--cell-size) * 9 + var(--border-width-thick) * 2);
+        border-radius: var(--radius);
+        touch-action: manipulation;
+      }
+      .cell {
+        width: var(--cell-size);
+        height: var(--cell-size);
+        font-size: clamp(1.2rem, 4vw, 1.75rem);
+        transition: background-color var(--transition-duration) ease-out;
+      }
+      .cell.border-r-thick {
+        border-right-width: var(--border-width-thick);
+      }
+      .cell.border-b-thick {
+        border-bottom-width: var(--border-width-thick);
+      }
+      .notes-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        width: 100%;
+        height: 100%;
+        font-size: clamp(0.5rem, 1.5vw, 0.7rem);
+        line-height: 1.1;
+      }
+      .numpad-btn:active {
+        transform: scale(0.95);
+      }
+      .animate-shake {
+        animation: shake 0.4s;
+      }
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-4px);
+        }
+        75% {
+          transform: translateX(4px);
+        }
+      }
+      .animate-pop-in {
+        animation: pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      @keyframes pop-in {
+        from {
+          transform: scale(0.7);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              slate: {
+                600: "#475569",
+                850: "#172033",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="h-full bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200 transition-colors duration-300"
+  >
+    <noscript>
+      <div
+        class="w-full h-full flex items-center justify-center p-8 text-center"
+      >
+        <p class="text-2xl font-semibold">
+          JavaScript is required to play this Sudoku game. Please enable it in
+          your browser settings.
+        </p>
+      </div>
+    </noscript>
+    <div
+      id="app"
+      v-cloak
+      class="flex flex-col items-center min-h-full w-full p-2 sm:p-4"
+    >
+      <div class="sr-only" aria-live="polite" aria-atomic="true">
+        {{ liveRegionMessage }}
+      </div>
+      <header class="text-center my-4 sm:my-6">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-tight">Sudoku</h1>
+      </header>
+
+      <main
+        class="w-full flex flex-col lg:flex-row items-center justify-center lg:items-start gap-6 xl:gap-12"
+      >
+        <div class="flex flex-col items-center">
+          <div
+            v-if="isLoading"
+            class="grid-container flex items-center justify-center bg-slate-200 dark:bg-slate-800"
+          >
+            <svg
+              class="animate-spin h-12 w-12 text-blue-600 dark:text-blue-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          </div>
+          <div
+            v-else
+            role="grid"
+            class="grid-container border-2 border-slate-800 dark:border-slate-700 bg-slate-800 dark:bg-slate-700 shadow-2xl"
+            @keydown="handleGridKeyDown"
+          >
+            <div
+              v-for="(row, rowIndex) in grid"
+              :key="rowIndex"
+              style="display: contents"
+            >
+              <div
+                v-for="(cell, colIndex) in row"
+                :key="colIndex"
+                :class="cellClasses(rowIndex, colIndex)"
+                :aria-label="'Cell R' + (rowIndex+1) + ' C' + (colIndex+1) + (grid[rowIndex][colIndex] ? ', Value ' + grid[rowIndex][colIndex] : ', Empty')"
+                :tabindex="isPrefilled(rowIndex, colIndex) ? -1 : 0"
+                @click="selectCell(rowIndex, colIndex)"
+                @focus="selectCell(rowIndex, colIndex)"
+                role="gridcell"
+              >
+                <template v-if="grid[rowIndex][colIndex]"
+                  ><span
+                    :class="{'animate-pop-in': justPlaced === `${rowIndex}-${colIndex}`} "
+                    >{{ grid[rowIndex][colIndex] }}</span
+                  ></template
+                >
+                <template
+                  v-else-if="notes[rowIndex][colIndex] && notes[rowIndex][colIndex].size > 0"
+                >
+                  <div class="notes-grid text-slate-500 dark:text-slate-400">
+                    <span v-for="n in 9" :key="n"
+                      >{{ notes[rowIndex][colIndex].has(n) ? n : '' }}</span
+                    >
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="flex flex-col gap-4 w-full max-w-sm mt-4 lg:mt-0 lg:max-w-xs"
+        >
+          <div class="grid grid-cols-2 gap-4 text-center">
+            <div
+              class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700"
+            >
+              <p
+                id="difficulty-label"
+                class="text-sm font-medium text-slate-600 dark:text-slate-400"
+              >
+                Difficulty
+              </p>
+              <p
+                class="text-xl font-semibold capitalize"
+                aria-labelledby="difficulty-label"
+              >
+                {{ difficulty }}
+              </p>
+            </div>
+            <div
+              class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700"
+            >
+              <p
+                id="timer-label"
+                class="text-sm font-medium text-slate-600 dark:text-slate-400"
+              >
+                Time
+              </p>
+              <p
+                class="text-xl font-semibold tracking-wider"
+                aria-labelledby="timer-label"
+              >
+                {{ formattedTime }}
+              </p>
+            </div>
+          </div>
+
+          <div
+            role="toolbar"
+            aria-label="Number input controls"
+            class="grid grid-cols-5 gap-2"
+          >
+            <button
+              v-for="num in 9"
+              :key="num"
+              @click="inputNumber(num)"
+              :disabled="isNumberComplete(num)"
+              :aria-label="`Input ${num}${isNumberComplete(num) ? ', all placed' : ''}`"
+              class="numpad-btn w-full h-14 text-2xl font-semibold bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900 focus-visible:ring-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              {{ num }}
+            </button>
+            <button
+              @click="inputNumber(0)"
+              aria-label="Erase number"
+              class="numpad-btn w-full h-14 text-2xl font-semibold bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900 focus-visible:ring-blue-500 transition-transform"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 mx-auto"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div
+            class="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 space-y-3"
+          >
+            <h2 class="text-lg font-semibold text-center">Controls</h2>
+            <div class="flex items-center">
+              <label
+                for="difficulty-select"
+                class="text-slate-700 dark:text-slate-300 mr-3 flex-shrink-0"
+                >New Game:</label
+              >
+              <select
+                id="difficulty-select"
+                v-model="selectedDifficulty"
+                class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+                <option value="expert">Expert</option>
+                <option value="master">Master</option>
+              </select>
+              <button
+                @click="startNewGameConfirm"
+                class="ml-3 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-sm hover:bg-blue-700 dark:hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-800 focus-visible:ring-blue-500 transition"
+              >
+                Start
+              </button>
+            </div>
+            <div class="flex items-center justify-between">
+              <label
+                for="notes-toggle"
+                class="text-slate-700 dark:text-slate-300"
+                >Notes Mode (N)</label
+              >
+              <button
+                @click="toggleNotesMode"
+                id="notes-toggle"
+                role="switch"
+                :aria-checked="isNotesMode"
+                :class="{'bg-blue-600': isNotesMode, 'bg-slate-200 dark:bg-slate-700': !isNotesMode}"
+                class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-800 focus-visible:ring-blue-500"
+              >
+                <span
+                  :class="{'translate-x-6': isNotesMode, 'translate-x-1': !isNotesMode}"
+                  class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform"
+                />
+              </button>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <button
+                @click="undo"
+                :disabled="history.length === 0 || isGameWon"
+                class="w-full bg-slate-500 text-white font-semibold py-3 rounded-lg shadow-sm hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-800 focus-visible:ring-slate-500 transition disabled:bg-slate-400 disabled:cursor-not-allowed"
+              >
+                Undo
+              </button>
+              <button
+                @click="checkSolution"
+                class="w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow-sm hover:bg-green-700 dark:hover:bg-green-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-800 focus-visible:ring-green-500 transition"
+              >
+                Validate
+              </button>
+              <button
+                @click="getHint"
+                :disabled="isGameWon || hintsUsed >= 3"
+                class="w-full bg-yellow-500 text-white font-semibold py-3 rounded-lg shadow-sm hover:bg-yellow-600 dark:hover:bg-yellow-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-800 focus-visible:ring-yellow-400 transition disabled:bg-slate-400 disabled:cursor-not-allowed"
+              >
+                Hint ({{ 3 - hintsUsed }})
+              </button>
+            </div>
+            <button
+              @click="solvePuzzleConfirm"
+              class="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-850 dark:hover:bg-black text-white font-semibold py-3 rounded-lg shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-800 focus-visible:ring-slate-700 transition"
+            >
+              Solve Puzzle
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <footer
+        class="mt-auto pt-8 text-center text-slate-500 dark:text-slate-400 text-sm"
+      >
+        <p>
+          © {{ new Date().getFullYear() }} Jozef Javorsky. All Rights Reserved.
+        </p>
+      </footer>
+
+      <div
+        v-if="showModal"
+        class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"
+        @keydown.escape="cancelModal"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="modalTitleId"
+        :aria-describedby="modalMessageId"
+      >
+        <div
+          ref="modalContent"
+          class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 m-4 max-w-sm text-center"
+          @click.stop
+        >
+          <h3 class="text-2xl font-bold mb-4" :id="modalTitleId">
+            {{ modalTitle }}
+          </h3>
+          <p
+            class="text-slate-700 dark:text-slate-300 mb-6"
+            :id="modalMessageId"
+          >
+            {{ modalMessage }}
+          </p>
+          <div class="flex justify-center gap-4">
+            <button
+              v-if="modalConfirmAction"
+              ref="confirmButton"
+              @click="confirmModal"
+              class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
+            >
+              Confirm
+            </button>
+            <button
+              ref="cancelButton"
+              @click="cancelModal"
+              class="px-6 py-2 bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-200 font-semibold rounded-lg shadow-md hover:bg-slate-300 dark:hover:bg-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+            >
+              {{ modalConfirmAction ? 'Cancel' : 'Close' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const {
+        createApp,
+        ref,
+        computed,
+        onMounted,
+        onUnmounted,
+        nextTick,
+        watch,
+      } = Vue;
+
+      createApp({
+        setup() {
+          const grid = ref([]);
+          const initialGrid = ref([]);
+          const solution = ref([]);
+          const notes = ref([]);
+          const history = ref([]);
+          const difficulty = ref("medium");
+          const selectedDifficulty = ref("medium");
+          const hintsUsed = ref(0);
+          const elapsedTime = ref(0);
+          const timer = ref(null);
+          const isGameWon = ref(false);
+          const isLoading = ref(true);
+          const isNotesMode = ref(false);
+          const errorCells = ref(new Set());
+          const selectedCell = ref({ row: null, col: null });
+          const justPlaced = ref(null);
+          const showModal = ref(false);
+          const modalTitle = ref("");
+          const modalMessage = ref("");
+          const modalConfirmAction = ref(null);
+          const modalTitleId = "modal-title";
+          const modalMessageId = "modal-message";
+          const modalContent = ref(null);
+          const confirmButton = ref(null);
+          const cancelButton = ref(null);
+          const numberCounts = ref({});
+          const liveRegionMessage = ref("");
+          let puzzleWorker = null;
+
+          const formattedTime = computed(() => {
+            const minutes = Math.floor(elapsedTime.value / 60);
+            const seconds = elapsedTime.value % 60;
+            return `${String(minutes).padStart(2, "0")}:${String(
+              seconds
+            ).padStart(2, "0")}`;
+          });
+
+          const isNumberComplete = (num) => numberCounts.value[num] === 9;
+
+          const updateNumberCounts = () => {
+            const counts = {};
+            for (let i = 1; i <= 9; i++) counts[i] = 0;
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                if (grid.value[r][c] > 0) {
+                  counts[grid.value[r][c]]++;
+                }
+              }
+            }
+            numberCounts.value = counts;
+          };
+
+          const startTimer = () => {
+            stopTimer();
+            timer.value = setInterval(() => {
+              if (!isGameWon.value) elapsedTime.value++;
+            }, 1000);
+          };
+
+          const stopTimer = () => {
+            if (timer.value) clearInterval(timer.value);
+          };
+
+          const startNewGame = (isNew = true) => {
+            isLoading.value = true;
+            stopTimer();
+            if (isNew) difficulty.value = selectedDifficulty.value;
+
+            puzzleWorker.postMessage({
+              cmd: "generate",
+              difficulty: difficulty.value,
+            });
+          };
+
+          const isPrefilled = (row, col) => initialGrid.value[row]?.[col] !== 0;
+
+          const selectCell = (row, col) => {
+            if (isGameWon.value) return;
+            selectedCell.value = {
+              row,
+              col,
+              isPrefilled: isPrefilled(row, col),
+            };
+          };
+
+          const pushToHistory = () => {
+            const state = {
+              grid: JSON.parse(JSON.stringify(grid.value)),
+              notes: JSON.parse(
+                JSON.stringify(
+                  notes.value.map((row) => row.map((s) => Array.from(s)))
+                )
+              ),
+              hintsUsed: hintsUsed.value,
+            };
+            history.value.push(state);
+          };
+
+          const undo = () => {
+            if (history.value.length === 0 || isGameWon.value) return;
+            const lastState = history.value.pop();
+            grid.value = lastState.grid;
+            notes.value = lastState.notes.map((row) =>
+              row.map((a) => new Set(a))
+            );
+            hintsUsed.value = lastState.hintsUsed;
+            updateNumberCounts();
+            errorCells.value.clear();
+            announceMessage("Last move undone.");
+          };
+
+          const inputNumber = (num) => {
+            const { row, col } = selectedCell.value;
+            if (
+              row === null ||
+              col === null ||
+              isPrefilled(row, col) ||
+              isGameWon.value
+            )
+              return;
+
+            pushToHistory();
+
+            if (isNotesMode.value) {
+              if (grid.value[row][col] !== 0) grid.value[row][col] = 0;
+              if (num === 0) {
+                notes.value[row][col].clear();
+                announceMessage(
+                  `Notes cleared for cell R${row + 1} C${col + 1}.`
+                );
+              } else {
+                const hasNote = notes.value[row][col].has(num);
+                hasNote
+                  ? notes.value[row][col].delete(num)
+                  : notes.value[row][col].add(num);
+                announceMessage(
+                  `Note ${num} ${hasNote ? "removed from" : "added to"} cell R${
+                    row + 1
+                  } C${col + 1}.`
+                );
+              }
+            } else {
+              if (notes.value[row][col].size > 0) notes.value[row][col].clear();
+              const previousValue = grid.value[row][col];
+              const newValue = num === 0 ? 0 : num;
+              if (previousValue === newValue) return;
+
+              grid.value[row][col] = newValue;
+              justPlaced.value = `${row}-${col}`;
+              setTimeout(() => (justPlaced.value = null), 300);
+              errorCells.value.clear();
+              updateNumberCounts();
+              announceMessage(
+                `Cell R${row + 1} C${col + 1} set to ${
+                  newValue === 0 ? "empty" : newValue
+                }.`
+              );
+              checkForWin();
+            }
+          };
+
+          const checkSolution = () => {
+            errorCells.value.clear();
+            let isFull = true;
+            let hasErrors = false;
+            const tempGrid = JSON.parse(JSON.stringify(grid.value));
+
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                const val = tempGrid[r][c];
+                if (val === 0) {
+                  isFull = false;
+                  continue;
+                }
+                tempGrid[r][c] = 0;
+                if (!isValid(tempGrid, r, c, val)) {
+                  errorCells.value.add(`${r}-${c}`);
+                  hasErrors = true;
+                }
+                tempGrid[r][c] = val;
+              }
+            }
+
+            if (hasErrors) {
+              showConfirmation(
+                "Errors Found",
+                "Some numbers conflict with each other. The incorrect cells have been highlighted."
+              );
+              announceMessage(
+                "Validation failed. Incorrect cells are highlighted."
+              );
+            } else if (!isFull) {
+              showConfirmation(
+                "Grid Incomplete",
+                "The grid is valid so far, but not all cells are filled. Keep going!"
+              );
+              announceMessage(
+                "Validation passed, but the grid is not complete."
+              );
+            } else {
+              checkForWin();
+              if (!isGameWon.value) {
+                showConfirmation(
+                  "Not Quite",
+                  "No direct conflicts found, but the solution is not correct yet."
+                );
+                announceMessage(
+                  "Validation passed, but this is not the correct solution."
+                );
+              }
+            }
+          };
+
+          const isValid = (board, row, col, num) => {
+            for (let i = 0; i < 9; i++) {
+              if (board[row][i] === num || board[i][col] === num) return false;
+            }
+            const startRow = Math.floor(row / 3) * 3;
+            const startCol = Math.floor(col / 3) * 3;
+            for (let i = 0; i < 3; i++) {
+              for (let j = 0; j < 3; j++) {
+                if (board[startRow + i][startCol + j] === num) return false;
+              }
+            }
+            return true;
+          };
+
+          const checkForWin = () => {
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                if (
+                  grid.value[r][c] === 0 ||
+                  grid.value[r][c] !== solution.value[r][c]
+                ) {
+                  return;
+                }
+              }
+            }
+            isGameWon.value = true;
+            stopTimer();
+            selectedCell.value = { row: null, col: null };
+            const message = `You solved the ${difficulty.value} puzzle in ${formattedTime.value}!`;
+            showConfirmation("Congratulations!", message);
+            announceMessage(`Puzzle solved. ${message}`);
+            localStorage.removeItem("sudokuGameState");
+          };
+
+          const getHint = () => {
+            if (isGameWon.value || hintsUsed.value >= 3) return;
+            const emptyCells = [];
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                if (grid.value[r][c] === 0) {
+                  emptyCells.push({ r, c });
+                }
+              }
+            }
+            if (emptyCells.length > 0) {
+              pushToHistory();
+              const cell =
+                emptyCells[Math.floor(Math.random() * emptyCells.length)];
+              const { r, c } = cell;
+              const correctValue = solution.value[r][c];
+              grid.value[r][c] = correctValue;
+              if (notes.value[r][c].size > 0) notes.value[r][c].clear();
+              hintsUsed.value++;
+              errorCells.value.clear();
+              updateNumberCounts();
+              announceMessage(
+                `Hint used. Cell R${r + 1} C${c + 1} is ${correctValue}. ${
+                  3 - hintsUsed.value
+                } hints remaining.`
+              );
+              checkForWin();
+            }
+          };
+
+          const solvePuzzle = () => {
+            pushToHistory();
+            grid.value = JSON.parse(JSON.stringify(solution.value));
+            notes.value = Array(9)
+              .fill()
+              .map(() =>
+                Array(9)
+                  .fill()
+                  .map(() => new Set())
+              );
+            isGameWon.value = true;
+            stopTimer();
+            updateNumberCounts();
+            announceMessage("Puzzle solved.");
+          };
+
+          const cellClasses = (row, col) => {
+            const classes = [
+              "cell",
+              "flex",
+              "items-center",
+              "justify-center",
+              "border-slate-300",
+              "dark:border-slate-600",
+              "border-b",
+              "border-r",
+            ];
+            const { row: selR, col: selC } = selectedCell.value;
+            const selectedValue =
+              selR !== null && grid.value[selR]?.[selC] > 0
+                ? grid.value[selR][selC]
+                : null;
+
+            if (isGameWon.value)
+              classes.push(
+                "game-won",
+                "bg-green-100",
+                "dark:bg-green-900",
+                "text-green-800",
+                "dark:text-green-200"
+              );
+            else if (isPrefilled(row, col))
+              classes.push(
+                "pre-filled",
+                "bg-slate-100",
+                "dark:bg-slate-850",
+                "font-bold"
+              );
+            else
+              classes.push(
+                "user-input",
+                "text-blue-600",
+                "dark:text-blue-400",
+                "cursor-pointer",
+                "bg-white",
+                "dark:bg-slate-900",
+                "hover:bg-slate-50",
+                "dark:hover:bg-slate-850"
+              );
+
+            if (!isGameWon.value && selR !== null) {
+              if (row === selR && col === selC)
+                classes.push("selected", "bg-blue-200", "dark:bg-slate-700");
+              else if (
+                row === selR ||
+                col === selC ||
+                (Math.floor(row / 3) === Math.floor(selR / 3) &&
+                  Math.floor(col / 3) === Math.floor(selC / 3))
+              )
+                classes.push("peer", "bg-slate-100", "dark:bg-slate-850");
+              if (selectedValue && grid.value[row][col] === selectedValue)
+                classes.push("same-value", "bg-blue-100", "dark:bg-slate-600");
+            }
+
+            if (errorCells.value.has(`${row}-${col}`))
+              classes.push(
+                "error",
+                "animate-shake",
+                "bg-red-200",
+                "dark:bg-red-900",
+                "text-red-700",
+                "dark:text-red-300"
+              );
+
+            if (col % 3 === 2)
+              classes.push(
+                "border-r-thick",
+                "border-r-slate-800",
+                "dark:border-r-slate-700"
+              );
+            if (row % 3 === 2)
+              classes.push(
+                "border-b-thick",
+                "border-b-slate-800",
+                "dark:border-b-slate-700"
+              );
+            if (row === 0)
+              classes.push(
+                "border-t-thick",
+                "border-t-slate-800",
+                "dark:border-t-slate-700"
+              );
+            if (col === 0)
+              classes.push(
+                "border-l-thick",
+                "border-l-slate-800",
+                "dark:border-l-slate-700"
+              );
+
+            return classes;
+          };
+
+          const handleGridKeyDown = (e) => {
+            const { row, col } = selectedCell.value;
+            if (row === null || isGameWon.value) return;
+
+            const keyMap = {
+              ArrowUp: [-1, 0],
+              ArrowDown: [1, 0],
+              ArrowLeft: [0, -1],
+              ArrowRight: [0, 1],
+            };
+            if (keyMap[e.key]) {
+              e.preventDefault();
+              const [dr, dc] = keyMap[e.key];
+              let newRow = row;
+              let newCol = col;
+              do {
+                newRow = (newRow + dr + 9) % 9;
+                newCol = (newCol + dc + 9) % 9;
+              } while (
+                isPrefilled(newRow, newCol) &&
+                (newRow !== row || newCol !== col)
+              );
+              selectCell(newRow, newCol);
+            } else if (e.key >= "1" && e.key <= "9") {
+              e.preventDefault();
+              inputNumber(parseInt(e.key));
+            } else if (
+              e.key === "Backspace" ||
+              e.key === "Delete" ||
+              e.key === "0"
+            ) {
+              e.preventDefault();
+              inputNumber(0);
+            } else if (e.key.toLowerCase() === "n") {
+              e.preventDefault();
+              toggleNotesMode();
+            } else if (
+              (e.ctrlKey || e.metaKey) &&
+              e.key.toLowerCase() === "z"
+            ) {
+              e.preventDefault();
+              undo();
+            }
+          };
+
+          const toggleNotesMode = () => {
+            isNotesMode.value = !isNotesMode.value;
+            announceMessage(`Notes mode ${isNotesMode.value ? "on" : "off"}.`);
+          };
+
+          const showConfirmation = (title, message, onConfirm = null) => {
+            modalTitle.value = title;
+            modalMessage.value = message;
+            modalConfirmAction.value = onConfirm;
+            showModal.value = true;
+          };
+
+          const startNewGameConfirm = () => {
+            if (history.value.length === 0 || isGameWon.value) {
+              startNewGame();
+            } else {
+              showConfirmation(
+                "Start New Game?",
+                "Are you sure you want to abandon your current progress?",
+                () => startNewGame()
+              );
+            }
+          };
+          const solvePuzzleConfirm = () =>
+            showConfirmation(
+              "Solve Puzzle?",
+              "Are you sure you want to reveal the solution?",
+              solvePuzzle
+            );
+
+          const confirmModal = () => {
+            if (modalConfirmAction.value) modalConfirmAction.value();
+            cancelModal();
+          };
+
+          const cancelModal = () => {
+            showModal.value = false;
+          };
+
+          const saveState = () => {
+            if (isGameWon.value || isLoading.value) return;
+            const state = {
+              grid: grid.value,
+              initialGrid: initialGrid.value,
+              solution: solution.value,
+              notes: Array.from(
+                notes.value.map((row) => row.map((s) => Array.from(s)))
+              ),
+              history: history.value,
+              difficulty: difficulty.value,
+              hintsUsed: hintsUsed.value,
+              elapsedTime: elapsedTime.value,
+            };
+            try {
+              localStorage.setItem("sudokuGameState", JSON.stringify(state));
+            } catch (e) {
+              console.error("Failed to save game state:", e);
+            }
+          };
+
+          const loadState = () => {
+            try {
+              const savedState = localStorage.getItem("sudokuGameState");
+              if (savedState) {
+                isLoading.value = true;
+                stopTimer();
+                const state = JSON.parse(savedState);
+                if (!state.grid || !state.initialGrid || !state.solution)
+                  throw new Error("Invalid game state");
+                grid.value = state.grid;
+                initialGrid.value = state.initialGrid;
+                solution.value = state.solution;
+                notes.value = state.notes.map((row) =>
+                  row.map((a) => new Set(a))
+                );
+                history.value = state.history || [];
+                difficulty.value = state.difficulty;
+                selectedDifficulty.value = state.difficulty;
+                hintsUsed.value = state.hintsUsed;
+                elapsedTime.value = state.elapsedTime;
+                isGameWon.value = false;
+                errorCells.value.clear();
+                selectedCell.value = { row: null, col: null };
+                updateNumberCounts();
+                startTimer();
+                isLoading.value = false;
+                announceMessage("Game loaded successfully.");
+                return true;
+              }
+            } catch (e) {
+              console.error("Failed to load game state:", e);
+              localStorage.removeItem("sudokuGameState");
+              if (!isLoading.value) {
+                showConfirmation(
+                  "Load Error",
+                  "Your saved game data was corrupted and could not be loaded. A new game will be started."
+                );
+              }
+            }
+            return false;
+          };
+
+          const setupDarkMode = () => {
+            const query = window.matchMedia("(prefers-color-scheme: dark)");
+            const updateTheme = (e) =>
+              document.documentElement.classList.toggle("dark", e.matches);
+            query.addEventListener("change", updateTheme);
+            if (query.matches) document.documentElement.classList.add("dark");
+          };
+
+          const announceMessage = (message) => {
+            liveRegionMessage.value = message;
+          };
+
+          const initializeWorker = () => {
+            const workerScript = `
+                const shuffle = (array) => {
+                    for (let i = array.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [array[i], array[j]] = [array[j], array[i]];
+                    }
+                    return array;
+                };
+                const isValid = (board, row, col, num) => {
+                    for (let i = 0; i < 9; i++) {
+                        if (board[row][i] === num || board[i][col] === num) return false;
+                    }
+                    const startRow = Math.floor(row / 3) * 3;
+                    const startCol = Math.floor(col / 3) * 3;
+                    for (let i = 0; i < 3; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            if (board[startRow + i][startCol + j] === num) return false;
+                        }
+                    }
+                    return true;
+                };
+                const solve = (board) => {
+                    for (let row = 0; row < 9; row++) {
+                        for (let col = 0; col < 9; col++) {
+                            if (board[row][col] === 0) {
+                                const numbers = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                                for (const num of numbers) {
+                                    if (isValid(board, row, col, num)) {
+                                        board[row][col] = num;
+                                        if (solve(board)) return true;
+                                        board[row][col] = 0;
+                                    }
+                                }
+                                return false;
+                            }
+                        }
+                    }
+                    return true;
+                };
+                const hasUniqueSolution = (board) => {
+                    let solutionCount = 0;
+                    const findSolutions = (b) => {
+                        let row = -1, col = -1;
+                        for (let r = 0; r < 9 && row === -1; r++) {
+                            for (let c = 0; c < 9; c++) {
+                                if (b[r][c] === 0) { row = r; col = c; break; }
+                            }
+                        }
+                        if (row === -1) { solutionCount++; return; }
+                        for (let num = 1; num <= 9 && solutionCount <= 1; num++) {
+                            if (isValid(b, row, col, num)) {
+                                b[row][col] = num;
+                                findSolutions(b);
+                            }
+                        }
+                        b[row][col] = 0;
+                    };
+                    const boardCopy = JSON.parse(JSON.stringify(board));
+                    findSolutions(boardCopy);
+                    return solutionCount === 1;
+                };
+                const generatePuzzle = (diff) => {
+                    const newGrid = Array(9).fill().map(() => Array(9).fill(0));
+                    solve(newGrid);
+                    const solution = JSON.parse(JSON.stringify(newGrid));
+                    const difficultyMap = { easy: 38, medium: 46, hard: 53, expert: 59, master: 64 };
+                    let cellsToRemove = difficultyMap[diff] || 46;
+                    const p = JSON.parse(JSON.stringify(newGrid));
+                    const cells = shuffle(Array.from({ length: 81 }, (_, i) => ({ r: Math.floor(i / 9), c: i % 9 })));
+                    
+                    while (cells.length > 0 && cellsToRemove > 0) {
+                        const cell = cells.pop();
+                        const {r, c} = cell;
+                        const temp = p[r][c];
+                        p[r][c] = 0;
+                        
+                        if (!hasUniqueSolution(p)) {
+                            p[r][c] = temp;
+                        } else {
+                            cellsToRemove--;
+                        }
+                    }
+                    return { puzzle: p, solution };
+                };
+                self.onmessage = (e) => {
+                    if (e.data.cmd === 'generate') {
+                        const { puzzle, solution } = generatePuzzle(e.data.difficulty);
+                        self.postMessage({ status: 'complete', puzzle, solution });
+                    }
+                };
+            `;
+            const blob = new Blob([workerScript], {
+              type: "application/javascript",
+            });
+            puzzleWorker = new Worker(URL.createObjectURL(blob));
+
+            puzzleWorker.onmessage = (e) => {
+              const { puzzle, solution: puzzleSolution } = e.data;
+              grid.value = JSON.parse(JSON.stringify(puzzle));
+              initialGrid.value = JSON.parse(JSON.stringify(puzzle));
+              solution.value = puzzleSolution;
+              notes.value = Array(9)
+                .fill()
+                .map(() =>
+                  Array(9)
+                    .fill()
+                    .map(() => new Set())
+                );
+              history.value = [];
+              hintsUsed.value = 0;
+              elapsedTime.value = 0;
+              isGameWon.value = false;
+              errorCells.value.clear();
+              selectedCell.value = { row: null, col: null };
+              isLoading.value = false;
+              updateNumberCounts();
+              startTimer();
+              announceMessage(`New ${difficulty.value} game started.`);
+            };
+          };
+
+          watch(showModal, (isShown) => {
+            if (isShown) {
+              nextTick(() => {
+                const focusableElements = Array.from(
+                  modalContent.value.querySelectorAll("button")
+                );
+                const firstElement = focusableElements[0];
+                const lastElement =
+                  focusableElements[focusableElements.length - 1];
+
+                (modalConfirmAction.value
+                  ? confirmButton.value
+                  : cancelButton.value
+                ).focus();
+
+                const trapFocus = (e) => {
+                  if (e.key !== "Tab") return;
+                  if (e.shiftKey) {
+                    if (document.activeElement === firstElement) {
+                      lastElement.focus();
+                      e.preventDefault();
+                    }
+                  } else {
+                    if (document.activeElement === lastElement) {
+                      firstElement.focus();
+                      e.preventDefault();
+                    }
+                  }
+                };
+                modalContent.value.addEventListener("keydown", trapFocus);
+                watch(
+                  showModal,
+                  (isNoLongerShown) => {
+                    if (!isNoLongerShown) {
+                      modalContent.value?.removeEventListener(
+                        "keydown",
+                        trapFocus
+                      );
+                    }
+                  },
+                  { once: true }
+                );
+              });
+            }
+          });
+
+          onMounted(() => {
+            initializeWorker();
+            if (!loadState()) {
+              startNewGame(false);
+            }
+            window.addEventListener("beforeunload", saveState);
+            setupDarkMode();
+          });
+
+          onUnmounted(() => {
+            stopTimer();
+            window.removeEventListener("beforeunload", saveState);
+            if (puzzleWorker) puzzleWorker.terminate();
+          });
+
+          return {
+            grid,
+            notes,
+            history,
+            isLoading,
+            difficulty,
+            selectedDifficulty,
+            formattedTime,
+            hintsUsed,
+            isGameWon,
+            isNotesMode,
+            showModal,
+            modalTitle,
+            modalMessage,
+            modalConfirmAction,
+            modalTitleId,
+            modalMessageId,
+            modalContent,
+            confirmButton,
+            cancelButton,
+            startNewGameConfirm,
+            checkSolution,
+            getHint,
+            solvePuzzleConfirm,
+            selectCell,
+            inputNumber,
+            cellClasses,
+            isPrefilled,
+            handleGridKeyDown,
+            toggleNotesMode,
+            confirmModal,
+            cancelModal,
+            justPlaced,
+            isNumberComplete,
+            undo,
+            liveRegionMessage,
+          };
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
